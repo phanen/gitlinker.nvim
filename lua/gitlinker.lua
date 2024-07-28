@@ -2,7 +2,6 @@ local M = {}
 
 local git = require("gitlinker.git")
 local buffer = require("gitlinker.buffer")
-local mappings = require("gitlinker.mappings")
 local opts = require("gitlinker.opts")
 
 -- public
@@ -12,7 +11,6 @@ M.hosts = require("gitlinker.hosts")
 --
 -- Sets the options
 -- Sets the hosts callbacks
--- Sets the mappings
 --
 -- @param config table with the schema
 -- {
@@ -25,7 +23,6 @@ M.hosts = require("gitlinker.hosts")
 --    ["githostname.tld"] = <func> -- where <func> is a function that takes a
 --    url_data table and returns the url
 --   },
---  mappings = "<keys>"-- keys for normal and visual mode keymaps
 -- }
 -- @param user_opts a table to override options passed in M.setup()
 function M.setup(config)
