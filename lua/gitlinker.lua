@@ -1,160 +1,233 @@
+-- ruifm/gitlinker.nvim
 local M = {}
 
-local git = require("gitlinker.git")
-local buffer = require("gitlinker.buffer")
-local cfg = require("gitlinker.config")
+-- this functions maybe should not kept here
+local get_base_https_url = function(ctx)
+  local url = 'https://' .. ctx.host
+  if ctx.port then url = url .. ':' .. ctx.port end
+  return url .. '/' .. ctx.path
+end
 
--- public
-M.hosts = require("gitlinker.hosts")
+--- Constructs a github style url
+function M.get_github_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/blob/' .. ctx.rev .. '/' .. ctx.file
 
---- Setup the plugin configuration
---
--- Sets the options
--- Sets the hosts callbacks
---
--- @param config table with the schema
--- {
---   opts = {
---    remote = "<remotename>", -- force the use of a specific remote
---    add_current_line_on_normal_mode = true/false, -- add the line nr to the url
---    url_callback = <func> -- what to do with the url
---   }, -- check gitlinker/opts for the default values
---  callbacks = {
---    ["githostname.tld"] = <func> -- where <func> is a function that takes a
---    url_data table and returns the url
---   },
--- }
--- @param user_opts a table to override options passed in M.setup()
+  if not ctx.lstart then return url end
+  url = url .. '#L' .. ctx.lstart
+  if ctx.lend then url = url .. '-L' .. ctx.lend end
+  return url
+end
 
-function M.setup(opts)
-  if opts then
-    cfg.setup(opts)
-    M.hosts.callbacks =
-      vim.tbl_deep_extend("force", M.hosts.callbacks, opts.callbacks or {})
+--- Constructs a gitea style url
+function M.get_gitea_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/src/commit/' .. ctx.rev .. '/' .. ctx.file
+
+  if not ctx.lstart then return url end
+  url = url .. '#L' .. ctx.lstart
+  if ctx.lend then url = url .. '-L' .. ctx.lend end
+  return url
+end
+
+--- Constructs a gitlab style url
+function M.get_gitlab_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/-/blob/' .. ctx.rev .. '/' .. ctx.file
+
+  if not ctx.lstart then return url end
+  url = url .. '#L' .. ctx.lstart
+  if ctx.lend then url = url .. '-' .. ctx.lend end
+  return url
+end
+
+--- Constructs a bitbucket style url
+function M.get_bitbucket_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/src/' .. ctx.rev .. '/' .. ctx.file
+
+  if not ctx.lstart then return url end
+  url = url .. '#lines-' .. ctx.lstart
+  if ctx.lend then url = url .. ':' .. ctx.lend end
+
+  return url
+end
+
+--- Constructs a gogs style url
+function M.get_gogs_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/src/' .. ctx.rev .. '/' .. ctx.file
+
+  if not ctx.lstart then return url end
+  url = url .. '#L' .. ctx.lstart
+  if ctx.lend then url = url .. '-L' .. ctx.lend end
+
+  return url
+end
+
+--- Constructs a cgit style url
+function M.get_cgit_type_url(ctx)
+  if ctx.path then ctx.path = ctx.path .. '.git/' end
+
+  local url = 'https://' .. ctx.host
+  if ctx.port then url = url .. ':' .. ctx.port end
+  url = url .. '/tree/' .. ctx.file .. '?id=' .. ctx.rev
+  if ctx.lstart then url = url .. '#n' .. ctx.lstart end
+  return url
+end
+
+--- Constructs a sourcehut style url
+function M.get_srht_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/tree/' .. ctx.rev .. '/item/' .. ctx.file
+
+  if not ctx.lstart then return url end
+  url = url .. '#L' .. ctx.lstart
+  if ctx.lend then url = url .. '-' .. ctx.lend end
+
+  return url
+end
+
+--- Constructs a launchpad style url
+function M.get_launchpad_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/tree/' .. ctx.file .. '?id=' .. ctx.rev
+
+  if ctx.lstart then url = url .. '#n' .. ctx.lstart end
+  return url
+end
+
+--- Constructs a repo.or.cz style url
+function M.get_repoorcz_type_url(ctx)
+  local url = get_base_https_url(ctx)
+  if not ctx.file or not ctx.rev then return url end
+  url = url .. '/blob/' .. ctx.rev .. ':/' .. ctx.file
+  if ctx.lstart then url = url .. '#l' .. ctx.lstart end
+  return url
+end
+
+local options = {
+  append_line_nr = true, -- if true adds the line nr in the url for normal mode
+  url_callback = function(url)
+    api.nvim_command("let @+ = '" .. url .. "'")
+    vim.ui.open(url)
+  end, -- callback for what to do with the url
+  print_url = true, -- print the url after action
+  routers = { -- (host, callback) pairs
+    ['github.com'] = M.get_github_type_url,
+    ['gitlab.com'] = M.get_gitlab_type_url,
+    ['try.gitea.io'] = M.get_gitea_type_url,
+    ['codeberg.org'] = M.get_gitea_type_url,
+    ['bitbucket.org'] = M.get_bitbucket_type_url,
+    ['try.gogs.io'] = M.get_gogs_type_url,
+    ['git.sr.ht'] = M.get_srht_type_url,
+    ['git.launchpad.net'] = M.get_launchpad_type_url,
+    ['repo.or.cz'] = M.get_repoorcz_type_url,
+    ['git.kernel.org'] = M.get_cgit_type_url,
+    ['git.savannah.gnu.org'] = M.get_cgit_type_url,
+  },
+}
+
+-- handle common pattern only
+-- https://stackoverflow.com/questions/31801271/what-are-the-supported-git-url-formats
+---@return table
+local parse_url = function(url)
+  local protocol, user, host, path
+
+  local tmp = url
+  url = tmp:match('(%S+)%.git$')
+  if not url then
+    url = tmp
   else
-    cfg.setup()
+    tmp = url
   end
+
+  -- https://
+  protocol, url = url:match('^(%S+)://(%S+)$')
+  if not protocol then
+    url = tmp
+  else
+    tmp = url
+  end
+
+  -- user@ (usre is user_pass)
+  user, url = url:match('^(%S+)@(%S+)$')
+  if not user then
+    url = tmp
+  else
+    tmp = url
+  end
+
+  -- localhost
+  if url:match('^~') or url:match('^/') then
+    path = url
+  else -- "host:/?path", "host/path"
+    host, path = url:match('^(%S+):(.*)$')
+    if host then
+      -- not sure...
+      if path:sub(1, 1) == '/' then path = path:sub(2) end
+    else
+      host, path = url:match('([^/]+)/(.*)$')
+      if not host then error(('path: %s, url: %s'):format(path, tmp)) end
+    end
+  end
+
+  return {
+    protocol = protocol,
+    user = user,
+    host = host,
+    path = path,
+  }
 end
 
-local parse_mode = function(mode)
-  mode = mode or vim.api.nvim_get_mode().mode
-  if not vim.tbl_contains({ "v", "V", "\022" }, mode) then
-    return mode
-  end
-  return "v"
-end
+---@param root string
+---@returns table?
+local parse_url_data = function(root)
+  local remote, remote_url = u.git.smart_remote_url()
+  local ctx = parse_url(remote_url)
+  local rev = assert(u.git.get_closest_remote_compatible_rev(remote))
+  local relative_path = u.buffer.relative_to(nil, root)
 
-local function get_buf_range_url_data(user_opts)
-  local git_root = git.get_git_root()
-  if not git_root then
-    vim.notify("Not in a git repository", vim.log.levels.ERROR)
-    return nil
-  end
-  local remote = eval(user_opts.remote)
-  local repo_url_data = git.get_repo_data(remote)
-  if not repo_url_data then
-    return nil
-  end
+  -- is file in rev
+  local obj = u.git({ 'cat-file', '-e', rev .. ':' .. relative_path }):wait()
+  if obj.code ~= 0 then return vim.notify(string.format('%s', obj.stderr), vim.log.levels.ERROR) end
 
-  local rev = git.get_closest_remote_compatible_rev(remote)
-  if not rev then
-    return nil
-  end
+  -- if file changed?
+  -- if u.git { 'diff', rev, '--', relative_path }:wait().stdout == 0 then
+  -- end
 
-  local buf_repo_path = buffer.get_relative_path(git_root)
-  if not git.is_file_in_rev(buf_repo_path, rev) then
-    vim.notify(
-      string.format("'%s' does not exist in remote '%s'", buf_repo_path, remote),
-      vim.log.levels.ERROR
-    )
-    return nil
-  end
-
-  local buf_path = buffer.get_relative_path()
-
-  local mode = parse_mode()
-  if
-    git.has_file_changed(buf_path, rev)
-    and (mode == "v" or user_opts.add_current_line_on_normal_mode)
-  then
-    vim.notify(
-      string.format(
-        "Computed Line numbers are probably wrong because '%s' has changes",
-        buf_path
-      ),
-      vim.log.levels.WARN
-    )
-  end
-  local range =
-    buffer.get_range(mode, user_opts.add_current_line_on_normal_mode)
-
-  return vim.tbl_extend("force", repo_url_data, {
+  local lstart, lend = u.buffer.visual_region()
+  return vim.tbl_extend('force', ctx, {
     rev = rev,
-    file = buf_repo_path,
-    lstart = range.lstart,
-    lend = range.lend,
+    file = relative_path,
+    lstart = lstart + 1,
+    lend = lend,
   })
 end
 
---- Retrieves the url for the selected buffer range
---
--- Gets the url data elements
--- Passes it to the matching host callback
--- Retrieves the url from the host callback
--- Passes the url to the url callback
--- Prints the url
---
--- @param user_opts a table to override options passed
---
--- @returns The url string
-function M.get_buf_range_url(user_opts)
-  user_opts = vim.tbl_deep_extend("force", cfg.get(), user_opts or {})
+---@returns string?
+function M.permalink()
+  local root = assert(u.git.root())
+  local ctx = assert(parse_url_data(root))
+  assert(ctx.host, 'fail to get host')
 
-  local url_data = get_buf_range_url_data(user_opts)
-  if not url_data then
-    return nil
-  end
+  -- get host callback
+  local host_callback = options.routers[ctx.host]
+  assert(host_callback, ('no callback for host: %s'):format(ctx.host))
 
-  local matching_callback = M.hosts.get_matching_callback(url_data.host)
-  if not matching_callback then
-    return nil
-  end
-
-  local url = matching_callback(url_data)
-
-  if user_opts.action_callback then
-    user_opts.action_callback(url)
-  end
-  if user_opts.print_url then
-    vim.notify(url)
-  end
-
+  local url = host_callback(ctx)
+  if options.url_callback then options.url_callback(url) end
+  if options.print_url then vim.notify(url, vim.log.levels.WARN) end
   return url
 end
 
-function M.get_repo_url(user_opts)
-  user_opts = vim.tbl_deep_extend("force", cfg.get(), user_opts or {})
-
-  local repo_url_data = git.get_repo_data(eval(user_opts.remote))
-  if not repo_url_data then
-    return nil
-  end
-
-  local matching_callback = M.hosts.get_matching_callback(repo_url_data.host)
-  if not matching_callback then
-    return nil
-  end
-
-  local url = matching_callback(repo_url_data)
-
-  if user_opts.action_callback then
-    user_opts.action_callback(url)
-  end
-  if user_opts.print_url then
-    vim.notify(url)
-  end
-
-  return url
-end
+M.setup = function(opts) options = vim.tbl_deep_extend('force', options, opts or {}) end
 
 return M
