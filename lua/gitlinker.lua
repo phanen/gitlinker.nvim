@@ -7,7 +7,6 @@ local opts = require("gitlinker.opts")
 
 -- public
 M.hosts = require("gitlinker.hosts")
-M.actions = require("gitlinker.actions")
 
 --- Setup the plugin configuration
 --
@@ -37,21 +36,24 @@ function M.setup(config)
       M.hosts.callbacks,
       config.callbacks or {}
     )
-    mappings.set(config.mappings)
   else
     opts.setup()
-    mappings.set()
   end
 end
 
-local function get_buf_range_url_data(mode, user_opts)
+local parse_mode = function(mode)
+  mode = mode or vim.api.nvim_get_mode().mode
+  if not vim.tbl_contains({ 'v', 'V', '\022' }, mode) then return mode end
+  return 'v'
+end
+
+local function get_buf_range_url_data(user_opts)
   local git_root = git.get_git_root()
   if not git_root then
     vim.notify("Not in a git repository", vim.log.levels.ERROR)
     return nil
   end
-  mode = mode or "n"
-  local remote = git.get_branch_remote() or user_opts.remote
+  local remote = eval(user_opts.remote)
   local repo_url_data = git.get_repo_data(remote)
   if not repo_url_data then
     return nil
@@ -72,6 +74,8 @@ local function get_buf_range_url_data(mode, user_opts)
   end
 
   local buf_path = buffer.get_relative_path()
+
+  local mode = parse_mode()
   if
     git.has_file_changed(buf_path, rev)
     and (mode == "v" or user_opts.add_current_line_on_normal_mode)
@@ -105,14 +109,13 @@ end
 -- Passes the url to the url callback
 -- Prints the url
 --
--- @param mode vim's mode this function was called on. Either 'v' or 'n'
 -- @param user_opts a table to override options passed
 --
 -- @returns The url string
-function M.get_buf_range_url(mode, user_opts)
+function M.get_buf_range_url(user_opts)
   user_opts = vim.tbl_deep_extend("force", opts.get(), user_opts or {})
 
-  local url_data = get_buf_range_url_data(mode, user_opts)
+  local url_data = get_buf_range_url_data(user_opts)
   if not url_data then
     return nil
   end
@@ -138,7 +141,7 @@ function M.get_repo_url(user_opts)
   user_opts = vim.tbl_deep_extend("force", opts.get(), user_opts or {})
 
   local repo_url_data = git.get_repo_data(
-    git.get_branch_remote() or user_opts.remote
+    eval(user_opts.remote)
   )
   if not repo_url_data then
     return nil
