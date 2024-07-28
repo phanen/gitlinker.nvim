@@ -7,25 +7,6 @@ local cfg = require("gitlinker.config")
 -- public
 M.hosts = require("gitlinker.hosts")
 
---- Setup the plugin configuration
---
--- Sets the options
--- Sets the hosts callbacks
---
--- @param config table with the schema
--- {
---   opts = {
---    remote = "<remotename>", -- force the use of a specific remote
---    add_current_line_on_normal_mode = true/false, -- add the line nr to the url
---    url_callback = <func> -- what to do with the url
---   }, -- check gitlinker/opts for the default values
---  callbacks = {
---    ["githostname.tld"] = <func> -- where <func> is a function that takes a
---    url_data table and returns the url
---   },
--- }
--- @param user_opts a table to override options passed in M.setup()
-
 function M.setup(opts)
   if opts then
     cfg.setup(opts)
@@ -48,17 +29,17 @@ local function get_buf_range_url_data(user_opts)
   local git_root = git.get_git_root()
   if not git_root then
     vim.notify("Not in a git repository", vim.log.levels.ERROR)
-    return nil
+    return
   end
   local remote = eval(user_opts.remote)
   local repo_url_data = git.get_repo_data(remote)
   if not repo_url_data then
-    return nil
+    return
   end
 
   local rev = git.get_closest_remote_compatible_rev(remote)
   if not rev then
-    return nil
+    return
   end
 
   local buf_repo_path = buffer.get_relative_path(git_root)
@@ -67,7 +48,7 @@ local function get_buf_range_url_data(user_opts)
       string.format("'%s' does not exist in remote '%s'", buf_repo_path, remote),
       vim.log.levels.ERROR
     )
-    return nil
+    return
   end
 
   local buf_path = buffer.get_relative_path()
@@ -97,61 +78,29 @@ local function get_buf_range_url_data(user_opts)
 end
 
 --- Retrieves the url for the selected buffer range
---
--- Gets the url data elements
--- Passes it to the matching host callback
--- Retrieves the url from the host callback
--- Passes the url to the url callback
--- Prints the url
---
--- @param user_opts a table to override options passed
---
--- @returns The url string
-function M.get_buf_range_url(user_opts)
-  user_opts = vim.tbl_deep_extend("force", cfg.get(), user_opts or {})
+---@param opts table override setuped options
+---@returns string?
+function M.get_permalink(opts)
+  opts = vim.tbl_deep_extend("force", cfg.get(), opts or {})
 
-  local url_data = get_buf_range_url_data(user_opts)
+  local url_data = get_buf_range_url_data(opts)
   if not url_data then
-    return nil
+    return
   end
 
   local matching_callback = M.hosts.get_matching_callback(url_data.host)
   if not matching_callback then
-    return nil
+    return
   end
 
   local url = matching_callback(url_data)
 
-  if user_opts.action_callback then
-    user_opts.action_callback(url)
-  end
-  if user_opts.print_url then
-    vim.notify(url)
+  if opts.url_callback then
+    opts.url_callback(url)
   end
 
-  return url
-end
-
-function M.get_repo_url(user_opts)
-  user_opts = vim.tbl_deep_extend("force", cfg.get(), user_opts or {})
-
-  local repo_url_data = git.get_repo_data(eval(user_opts.remote))
-  if not repo_url_data then
-    return nil
-  end
-
-  local matching_callback = M.hosts.get_matching_callback(repo_url_data.host)
-  if not matching_callback then
-    return nil
-  end
-
-  local url = matching_callback(repo_url_data)
-
-  if user_opts.action_callback then
-    user_opts.action_callback(url)
-  end
-  if user_opts.print_url then
-    vim.notify(url)
+  if opts.print_url then
+    vim.notify(url, vim.log.levels.WARN)
   end
 
   return url

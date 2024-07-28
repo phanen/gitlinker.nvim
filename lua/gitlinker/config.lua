@@ -3,10 +3,11 @@ local M = {}
 local defaults = {
   remote = "origin", -- force the use of a specific remote
   add_current_line_on_normal_mode = true, -- if true adds the line nr in the url for normal mode
-  action_callback = function(url)
+  url_callback = function(url)
     api.nvim_command("let @+ = '" .. url .. "'")
   end, -- callback for what to do with the url
   print_url = true, -- print the url after action
+  -- callbacks = { ["githostname.tld"] = function(url_data) url end },
 }
 
 local opts
