@@ -2,7 +2,7 @@ local M = {}
 
 local git = require("gitlinker.git")
 local buffer = require("gitlinker.buffer")
-local opts = require("gitlinker.opts")
+local cfg = require("gitlinker.config")
 
 -- public
 M.hosts = require("gitlinker.hosts")
@@ -25,23 +25,23 @@ M.hosts = require("gitlinker.hosts")
 --   },
 -- }
 -- @param user_opts a table to override options passed in M.setup()
-function M.setup(config)
-  if config then
-    opts.setup(config.opts)
-    M.hosts.callbacks = vim.tbl_deep_extend(
-      "force",
-      M.hosts.callbacks,
-      config.callbacks or {}
-    )
+
+function M.setup(opts)
+  if opts then
+    cfg.setup(opts)
+    M.hosts.callbacks =
+      vim.tbl_deep_extend("force", M.hosts.callbacks, opts.callbacks or {})
   else
-    opts.setup()
+    cfg.setup()
   end
 end
 
 local parse_mode = function(mode)
   mode = mode or vim.api.nvim_get_mode().mode
-  if not vim.tbl_contains({ 'v', 'V', '\022' }, mode) then return mode end
-  return 'v'
+  if not vim.tbl_contains({ "v", "V", "\022" }, mode) then
+    return mode
+  end
+  return "v"
 end
 
 local function get_buf_range_url_data(user_opts)
@@ -85,10 +85,8 @@ local function get_buf_range_url_data(user_opts)
       vim.log.levels.WARN
     )
   end
-  local range = buffer.get_range(
-    mode,
-    user_opts.add_current_line_on_normal_mode
-  )
+  local range =
+    buffer.get_range(mode, user_opts.add_current_line_on_normal_mode)
 
   return vim.tbl_extend("force", repo_url_data, {
     rev = rev,
@@ -110,7 +108,7 @@ end
 --
 -- @returns The url string
 function M.get_buf_range_url(user_opts)
-  user_opts = vim.tbl_deep_extend("force", opts.get(), user_opts or {})
+  user_opts = vim.tbl_deep_extend("force", cfg.get(), user_opts or {})
 
   local url_data = get_buf_range_url_data(user_opts)
   if not url_data then
@@ -135,11 +133,9 @@ function M.get_buf_range_url(user_opts)
 end
 
 function M.get_repo_url(user_opts)
-  user_opts = vim.tbl_deep_extend("force", opts.get(), user_opts or {})
+  user_opts = vim.tbl_deep_extend("force", cfg.get(), user_opts or {})
 
-  local repo_url_data = git.get_repo_data(
-    eval(user_opts.remote)
-  )
+  local repo_url_data = git.get_repo_data(eval(user_opts.remote))
   if not repo_url_data then
     return nil
   end
